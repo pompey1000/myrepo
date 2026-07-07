@@ -84,12 +84,12 @@ export const apiCreateGame = createServerFn({ method: 'POST' })
   });
 
 export const apiJoinGame = createServerFn({ method: 'POST' })
-  .validator((data: { gameId: string; playerId: string; username: string }) => data)
+  .validator((data: { gameId: string; playerId: string; username: string; cardCount?: number }) => data)
   .handler(async (ctx) => {
     const game = gameStore.get(ctx.data.gameId);
     if (!game) throw new Error('Game not found');
     if (game.status !== 'waiting') throw new Error('Game already started');
-    const player = addPlayer(game, ctx.data.playerId, ctx.data.username);
+    const player = addPlayer(game, ctx.data.playerId, ctx.data.username, ctx.data.cardCount);
     return {
       player,
       game: serializeGame(game),

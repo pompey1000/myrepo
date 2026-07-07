@@ -84,9 +84,11 @@ export function createGame(type: GameType): GameState {
 }
 
 /** Add a player to a game */
-export function addPlayer(game: GameState, playerId: string, username: string): Player {
+export function addPlayer(game: GameState, playerId: string, username: string, cardCount?: number): Player {
   const config = GAME_CONFIGS[game.type];
-  const cards = generateCards(config.cardsPerPlayer);
+  const count = cardCount ?? config.cardsPerPlayer;
+  const capped = Math.min(Math.max(count, 1), 10);
+  const cards = generateCards(capped);
   const player: Player = { id: playerId, username, cards, hasWon: false };
   game.players.push(player);
   return player;
@@ -100,12 +102,14 @@ export function startGame(game: GameState): boolean {
   return true;
 }
 
-/** Call the next number and auto-daub all player cards */
-export function progressGame(game: GameState): {
+export interface ProgressResult {
   number: number | null;
   winners: Array<{ playerId: string; username: string; cardId: string; winResult: WinResult }>;
   gameOver: boolean;
-}> {
+}
+
+/** Call the next number and auto-daub all player cards */
+export function progressGame(game: GameState): ProgressResult {
   if (game.status !== 'active') {
     return { number: null, winners: [], gameOver: game.status === 'finished' };
   }
@@ -176,6 +180,11 @@ export function serializeGame(game: GameState) {
       username: p.username,
       cardCount: p.cards.length,
       hasWon: p.hasWon,
+      cards: p.cards.map((c) => ({
+        id: c.id,
+        grid: c.grid,
+        marked: c.marked,
+      })),
     })),
     winners: game.winners,
     callerState: {
