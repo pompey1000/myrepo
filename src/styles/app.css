@@ -1,8 +1,154 @@
 @import "tailwindcss";
 
+@theme {
+  --color-bingo-red: #8b1a1a;
+  --color-bingo-red-light: #c62828;
+  --color-bingo-gold: #c9a227;
+  --color-bingo-gold-light: #f0d060;
+  --color-bingo-gold-dark: #a07818;
+  --color-bingo-green: #1b5e20;
+  --color-bingo-green-light: #388e3c;
+  --color-bingo-felt: #0d4e1e;
+  --color-bingo-dark: #1a0a0a;
+  --color-bingo-card: #fff8e7;
+  --color-bingo-cell: #fef3c7;
+  --color-bingo-header: #2c1810;
+}
+
 @layer base {
-  html,
-  body {
-    @apply bg-white text-gray-900 antialiased dark:bg-gray-950 dark:text-gray-100;
+  html, body {
+    @apply bg-bingo-dark text-gray-100 antialiased;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #c9a227 #1a0a0a;
+  }
+}
+
+@layer components {
+  .bingo-card {
+    @apply bg-bingo-card rounded-xl shadow-2xl border-2 border-bingo-gold overflow-hidden;
+  }
+
+  .bingo-card-header {
+    @apply bg-gradient-to-r from-bingo-red to-bingo-red-light text-white font-bold text-center py-2 text-lg tracking-wider;
+  }
+
+  .bingo-cell {
+    @apply bg-bingo-cell text-bingo-dark font-bold text-center flex items-center justify-center;
+    @apply border border-bingo-gold/30;
+    aspect-ratio: 1;
+  }
+
+  .bingo-cell-free {
+    @apply bg-gradient-to-br from-bingo-gold to-bingo-gold-light text-bingo-dark;
+  }
+
+  .bingo-cell-called {
+    @apply bg-gradient-to-br from-bingo-green to-bingo-green-light text-white;
+    @apply shadow-inner;
+  }
+
+  .bingo-column-header {
+    @apply bg-bingo-header text-bingo-gold font-bold text-center py-1 text-sm uppercase tracking-widest;
+    @apply border border-bingo-gold/20;
+  }
+
+  .game-tier-card {
+    @apply relative overflow-hidden rounded-2xl border-2 p-6 transition-all duration-300 cursor-pointer;
+    @apply hover:scale-[1.02] hover:shadow-2xl;
+  }
+
+  .game-tier-card-mini {
+    @apply border-bingo-green/50 bg-gradient-to-br from-bingo-dark via-green-950 to-bingo-dark;
+    @apply hover:border-bingo-green-light hover:shadow-green-900/50;
+  }
+
+  .game-tier-card-major {
+    @apply border-bingo-gold/50 bg-gradient-to-br from-bingo-dark via-yellow-950 to-bingo-dark;
+    @apply hover:border-bingo-gold-light hover:shadow-yellow-900/50;
+  }
+
+  .game-tier-card-mega {
+    @apply border-bingo-red/50 bg-gradient-to-br from-bingo-dark via-red-950 to-bingo-dark;
+    @apply hover:border-bingo-red-light hover:shadow-red-900/50;
+  }
+
+  .nav-link {
+    @apply text-gray-300 hover:text-bingo-gold transition-colors font-medium;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-r from-bingo-gold to-bingo-gold-dark text-bingo-dark font-bold py-2.5 px-6 rounded-xl;
+    @apply hover:from-bingo-gold-light hover:to-bingo-gold transition-all;
+    @apply shadow-lg shadow-bingo-gold/20;
+  }
+
+  .btn-secondary {
+    @apply bg-gradient-to-r from-bingo-red to-bingo-red-light text-white font-bold py-2.5 px-6 rounded-xl;
+    @apply hover:from-red-700 hover:to-red-600 transition-all;
+  }
+
+  .btn-ghost {
+    @apply border border-bingo-gold/40 text-bingo-gold font-medium py-2 px-5 rounded-xl;
+    @apply hover:bg-bingo-gold/10 transition-all;
+  }
+
+  .number-ball {
+    @apply inline-flex items-center justify-center rounded-full font-bold;
+    @apply shadow-lg;
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .number-ball-called {
+    @apply bg-gradient-to-br from-bingo-green to-green-700 text-white;
+    @apply shadow-green-900/40;
+  }
+
+  .number-ball-current {
+    @apply bg-gradient-to-br from-bingo-gold to-amber-600 text-bingo-dark;
+    @apply shadow-amber-900/50 scale-110;
+    width: 5rem;
+    height: 5rem;
+    font-size: 1.5rem;
+  }
+
+  .win-overlay {
+    @apply fixed inset-0 z-50 flex items-center justify-center;
+    background: rgba(0, 0, 0, 0.85);
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .win-card {
+    @apply bg-gradient-to-br from-bingo-gold to-amber-600 text-bingo-dark rounded-3xl p-10 text-center;
+    @apply shadow-2xl shadow-bingo-gold/40;
+    animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes popIn {
+    from { transform: scale(0.5); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  @keyframes pulse-gold {
+    0%, 100% { box-shadow: 0 0 10px rgba(201, 162, 39, 0.3); }
+    50% { box-shadow: 0 0 25px rgba(201, 162, 39, 0.6); }
+  }
+
+  .animate-pulse-gold {
+    animation: pulse-gold 2s ease-in-out infinite;
+  }
+
+  @keyframes confetti-fall {
+    0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
   }
 }
