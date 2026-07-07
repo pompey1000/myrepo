@@ -3,6 +3,7 @@ import { createFileRoute, useParams, useNavigate } from "@tanstack/react-router"
 import { apiCreateGame, apiJoinGame, apiStartGame, apiNextNumber, apiGetGame } from "../../lib/server-functions";
 import type { GameType } from "../../lib/gameState";
 import { GAME_CONFIGS } from "../../lib/gameState";
+import { getBalance, getBalanceFormatted, deductFunds, canAfford } from "../../lib/wallet";
 
 export const Route = createFileRoute("/game/$gameType")({
   component: GamePage,
@@ -252,6 +253,7 @@ function GamePage() {
   const [username, setUsername] = useState("");
   const [cardCount, setCardCount] = useState(3);
   const [joining, setJoining] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(getBalance());
   const [error, setError] = useState("");
 
   // Playing state

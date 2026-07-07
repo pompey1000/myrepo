@@ -1,6 +1,7 @@
-import { ReactNode } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import appCss from "../styles/app.css?url";
+import { getBalance, getBalanceFormatted } from "../lib/wallet";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -32,6 +33,15 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { children: ReactNode }) {
+  const [balance, setBalance] = useState(0);
+
+  useEffect(() => {
+    setBalance(getBalance());
+    // Refresh balance every 2 seconds (in case of manual confirm from shop)
+    const interval = setInterval(() => setBalance(getBalance()), 2000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <html lang="en">
       <head>
@@ -44,11 +54,23 @@ function RootDocument({ children }: { children: ReactNode }) {
               <span className="text-2xl">🎱</span>
               <span className="text-xl font-bold text-bingo-gold">BingoJackpot</span>
             </a>
-            <div className="flex items-center gap-6">
-              <a href="/" className="nav-link">Home</a>
-              <a href="/#games" className="nav-link">Games</a>
-              <a href="#" className="nav-link">Shop</a>
-              <a href="#" className="nav-link">How to Play</a>
+            <div className="flex items-center gap-4 sm:gap-6">
+              <a href="/" className="nav-link text-sm sm:text-base">Home</a>
+              <a href="/#games" className="nav-link text-sm sm:text-base">Games</a>
+              <a href="/shop" className="nav-link text-sm sm:text-base">Shop</a>
+              <a href="#" className="nav-link text-sm sm:text-base hidden sm:inline">How to Play</a>
+              <div className="flex items-center gap-2 border-l border-white/10 pl-4">
+                <span className="text-xs text-gray-500 hidden sm:inline">Balance</span>
+                <span className="text-sm sm:text-base font-bold text-bingo-gold">
+                  {getBalanceFormatted()}
+                </span>
+                <a
+                  href="/shop"
+                  className="rounded-lg bg-bingo-gold/20 px-2.5 py-1 text-xs font-bold text-bingo-gold hover:bg-bingo-gold/30 transition-all"
+                >
+                  + Top Up
+                </a>
+              </div>
             </div>
           </nav>
         </header>
