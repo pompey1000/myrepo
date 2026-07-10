@@ -22,3 +22,5 @@ src/routeTree.gen.ts
 
 # File store JSON (no longer used — DB lives in Neon).
 /data/
+.vercel
+.env*

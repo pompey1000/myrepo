@@ -44,7 +44,7 @@ function SignupPage() {
       <div className="flex min-h-dvh flex-col">
         <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-            <Link href="/" className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-sm font-bold text-white">
                 C
               </div>
@@ -64,7 +64,7 @@ function SignupPage() {
             <h2 className="mt-4 text-xl font-bold text-gray-900 dark:text-white">Account created!</h2>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
               Welcome to ClearScore AI.{" "}
-              <Link href="/dashboard" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+              <Link to="/dashboard" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
                 Go to your dashboard →
               </Link>
             </p>
@@ -78,7 +78,7 @@ function SignupPage() {
     <div className="flex min-h-dvh flex-col">
       <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-950">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
-          <Link href="/" className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-sm font-bold text-white">
               C
             </div>
@@ -211,7 +211,7 @@ function SignupPage() {
 
           <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
             Already have an account?{" "}
-            <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+            <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
               Sign in
             </Link>
           </p>
