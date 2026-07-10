@@ -1,0 +1,9 @@
+{
+  "buildCommand": "vite build",
+  "installCommand": "npm install",
+  "outputDirectory": "dist/client",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
+  ]
+}
