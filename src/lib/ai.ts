@@ -225,6 +225,82 @@ const complete = async <T>(args: CompleteArgs): Promise<T> => {
 };
 
 // =============================================================================
+// Free-form chat — mirrors `complete()` but without `response_format: json_object`.
+// Used by the customer-support chat endpoint (src/lib/chat.ts) where we want
+// the model to respond in natural language rather than a typed JSON object.
+// =============================================================================
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+export interface ChatCompletion {
+  /** The model's reply text. */
+  text: string;
+  /** Total tokens (prompt + completion). */
+  tokens_used: number;
+  /** Estimated cost in USD. */
+  cost: number;
+}
+
+export const chatCompletion = async (args: {
+  endpoint: string;
+  user_id?: string | null;
+  model?: string;
+  messages: ChatMessage[];
+  temperature?: number;
+}): Promise<ChatCompletion> => {
+  const model = args.model ?? DEFAULT_MODEL;
+  try {
+    const completion = await getClient().chat.completions.create({
+      model,
+      temperature: args.temperature ?? 0.4,
+      messages: args.messages,
+    });
+
+    const message = completion.choices[0]?.message?.content;
+    if (!message) {
+      throw new AIServiceError(
+        "OpenAI returned an empty completion",
+        "invalid_response",
+      );
+    }
+
+    const usage = completion.usage;
+    const prompt_tokens = usage?.prompt_tokens ?? 0;
+    const completion_tokens = usage?.completion_tokens ?? 0;
+    const tokens_used = prompt_tokens + completion_tokens;
+    const cost = estimateCost(model, prompt_tokens, completion_tokens);
+
+    logApiCall({
+      user_id: args.user_id ?? null,
+      endpoint: args.endpoint,
+      model,
+      tokens_used,
+      cost,
+      meta: {
+        prompt_tokens,
+        completion_tokens,
+        temperature: args.temperature ?? 0.4,
+        mode: "chat",
+      },
+    }).catch((err) => {
+      console.error("[ai] logApiCall failed:", err);
+    });
+
+    return { text: message, tokens_used, cost };
+  } catch (err) {
+    if (err instanceof AIServiceError) throw err;
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes("429") || message.toLowerCase().includes("rate")) {
+      throw new AIServiceError(message, "rate_limited", err);
+    }
+    throw new AIServiceError(message, "openai_error", err);
+  }
+};
+
+// =============================================================================
 // Prompts
 // =============================================================================
 
@@ -513,4 +589,5 @@ export const __ai = {
   DEFAULT_MODEL,
   PREMIUM_MODEL,
   PRICES,
+  chatCompletion,
 };
