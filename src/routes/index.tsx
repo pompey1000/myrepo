@@ -178,7 +178,7 @@ function Home() {
             </button>
             <ThemeToggle />
             <Link
-              href="/signup"
+              to="/signup"
               className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-indigo-600"
             >
               Get Started Free
@@ -217,7 +217,7 @@ function Home() {
                 Pricing
               </button>
               <Link
-                href="/signup"
+                to="/signup"
                 className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700"
                 onClick={() => setMobileMenuOpen(false)}
               >
@@ -256,7 +256,7 @@ function Home() {
 
           <div className="mt-8 flex flex-col gap-4 sm:flex-row">
             <Link
-              href="/signup"
+              to="/signup"
               className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-indigo-600/25 transition-all hover:bg-indigo-700 hover:shadow-xl hover:shadow-indigo-600/30 focus-visible:outline-2 focus-visible:outline-indigo-600"
             >
               Get Started Free
