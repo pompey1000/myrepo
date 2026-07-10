@@ -176,6 +176,12 @@ function Home() {
             <button onClick={() => scrollTo("pricing")} className="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
               Pricing
             </button>
+            <Link to="/about" className="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+              About
+            </Link>
+            <Link to="/faq" className="text-sm font-medium text-gray-600 transition-colors hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+              FAQ
+            </Link>
             <ThemeToggle />
             <Link
               to="/signup"
@@ -216,6 +222,12 @@ function Home() {
               <button onClick={() => scrollTo("pricing")} className="rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
                 Pricing
               </button>
+              <Link to="/about" className="rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" onClick={() => setMobileMenuOpen(false)}>
+                About
+              </Link>
+              <Link to="/faq" className="rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" onClick={() => setMobileMenuOpen(false)}>
+                FAQ
+              </Link>
               <Link
                 to="/signup"
                 className="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700"

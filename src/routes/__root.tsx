@@ -7,6 +7,7 @@ import {
 import type { ReactNode } from "react";
 
 import appCss from "~/styles/app.css?url";
+import ChatWidget from "~/components/ChatWidget";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -104,6 +105,7 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
+        <ChatWidget />
         <Scripts />
       </body>
     </html>
