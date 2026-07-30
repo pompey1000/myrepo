@@ -11,7 +11,12 @@ cd "$(dirname "$0")"
 umask 002
 mkdir -p .run
 
+# The workspace starts as sources only (the coming-soon placeholder serves from
+# the image's pre-built copy), so the first publish installs deps here. No-op
+# once node_modules is current.
+bun install
 bun run build
+export STRIPE_PUBLISHABLE_KEY="pk_live_51Tz0wYDF7uYdrpFOivW1Asb1k9b4fhjy8d227lCHcLce8TysHiZvaceVdqVwdh6PpFSkeY9JfUVfEqZC5iOtzmA300VRPLgoxI"
 setsid nohup bun run start > .run/server.log 2>&1 < /dev/null &
 
 # Wait for the new server to actually answer before reporting success, so a
