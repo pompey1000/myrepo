@@ -49,7 +49,7 @@ app.post("/api/auth/register", async (req, res) => {
     );
 
     const user = db
-      .query("SELECT id, email, username, account_type, created_at FROM users WHERE id = ?")
+      .query("SELECT id, email, username, account_type, membership, created_at FROM users WHERE id = ?")
       .get(result.lastInsertRowid);
 
     const token = signToken({ userId: user.id, email: user.email });
@@ -61,6 +61,7 @@ app.post("/api/auth/register", async (req, res) => {
         email: user.email,
         username: user.username,
         accountType: user.account_type || "personal",
+        membership: user.membership || "free",
         created_at: user.created_at,
       },
     });
@@ -80,7 +81,7 @@ app.post("/api/auth/login", async (req, res) => {
     }
 
     const user = db
-      .query("SELECT id, email, username, password_hash, account_type, created_at FROM users WHERE email = ?")
+      .query("SELECT id, email, username, password_hash, account_type, membership, created_at FROM users WHERE email = ?")
       .get(email);
 
     if (!user) {
@@ -101,6 +102,7 @@ app.post("/api/auth/login", async (req, res) => {
         email: user.email,
         username: user.username,
         accountType: user.account_type || "personal",
+        membership: user.membership || "free",
         created_at: user.created_at,
       },
     });
@@ -112,8 +114,8 @@ app.post("/api/auth/login", async (req, res) => {
 
 // GET /api/auth/me — protected
 app.get("/api/auth/me", authMiddleware, (req, res) => {
-  const { account_type, ...rest } = req.user;
-  res.json({ user: { ...rest, accountType: account_type || "personal" } });
+  const { account_type, membership, ...rest } = req.user;
+  res.json({ user: { ...rest, accountType: account_type || "personal", membership: membership || "free" } });
 });
 
 // ── Payment method routes ──────────────────────────────────────────────────────
@@ -271,11 +273,27 @@ app.post("/api/withdraw", authMiddleware, (req, res) => {
       return res.status(400).json({ error: "Insufficient balance" });
     }
 
-    // Fee calculation
+    // Fee calculation based on account type AND membership
+    const membership = req.user.membership || "free";
+    const accountType = req.user.account_type || "personal";
+    
+    let feePercent = 0;
     let feeCents = 0;
-    if (paymentMethod.type === "card") {
-      feeCents = Math.ceil(amountCents * 0.02);
+
+    if (membership === "premium") {
+      // Premium members pay no fees on any withdrawal method
+      feePercent = 0;
+      feeCents = 0;
+    } else if (paymentMethod.type === "card") {
+      if (accountType === "business") {
+        feePercent = 5;
+        feeCents = Math.ceil(amountCents * 5 / 100);
+      } else {
+        feePercent = 3.5;
+        feeCents = Math.ceil(amountCents * 35 / 1000);
+      }
     }
+    // Bank withdrawals are always free for non-premium too
     const netCents = amountCents - feeCents;
 
     // Atomic transaction
@@ -305,7 +323,9 @@ app.post("/api/withdraw", authMiddleware, (req, res) => {
         success: true,
         amountCents,
         feeCents,
+        feePercent,
         netCents,
+        membership,
         newBalanceCents: updatedUser.balance_cents,
         paymentMethod: {
           id: paymentMethod.id,
@@ -319,6 +339,38 @@ app.post("/api/withdraw", authMiddleware, (req, res) => {
     }
   } catch (err) {
     console.error("Withdraw error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Membership routes ───────────────────────────────────────────────────────────
+
+// GET /api/membership — Get current membership status
+app.get("/api/membership", authMiddleware, (req, res) => {
+  try {
+    const membership = req.user.membership || "free";
+    res.json({ membership });
+  } catch (err) {
+    console.error("Membership fetch error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/membership/upgrade — Simulated upgrade to premium
+app.post("/api/membership/upgrade", authMiddleware, (req, res) => {
+  try {
+    const currentMembership = req.user.membership || "free";
+    
+    if (currentMembership === "premium") {
+      return res.json({ membership: "premium", message: "You are already a Premium member!" });
+    }
+
+    // Flip the flag — no real payment processing yet
+    db.run("UPDATE users SET membership = 'premium' WHERE id = ?", [req.user.id]);
+
+    res.json({ membership: "premium", message: "Welcome to Premium! 🎉" });
+  } catch (err) {
+    console.error("Membership upgrade error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

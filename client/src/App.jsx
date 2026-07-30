@@ -12,6 +12,7 @@ import SendMoney from "./pages/SendMoney.jsx";
 import SendConfirmation from "./pages/SendConfirmation.jsx";
 import History from "./pages/History.jsx";
 import Withdraw from "./pages/Withdraw.jsx";
+import Premium from "./pages/Premium.jsx";
 import About from "./pages/About.jsx";
 import Terms from "./pages/Terms.jsx";
 
@@ -53,6 +54,7 @@ function AppContent() {
       else if (hash === "send-confirm") setPage("send-confirm");
       else if (hash === "history") setPage("history");
       else if (hash === "withdraw") setPage("withdraw");
+      else if (hash === "premium") setPage("premium");
       else if (hash === "about") setPage("about");
       else if (hash === "terms") setPage("terms");
       else setPage("home");
@@ -76,7 +78,7 @@ function AppContent() {
       .catch(() => {});
   }, [user]);
 
-  const isSubPage = page === "add-card" || page === "add-bank" || page === "send-confirm" || page === "withdraw" || page === "about" || page === "terms";
+  const isSubPage = page === "add-card" || page === "add-bank" || page === "send-confirm" || page === "withdraw" || page === "premium" || page === "about" || page === "terms";
   const isTabPage = page === "home" || page === "send" || page === "history" || page === "payment-methods";
 
   if (loading) {
@@ -93,7 +95,7 @@ function AppContent() {
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-          <div style={{ fontSize: "2rem" }}>$</div>
+          <div style={{ fontSize: "2rem" }}>💸</div>
           <div>Loading...</div>
         </div>
       </div>
@@ -149,10 +151,10 @@ function AppContent() {
                   justifyContent: "center",
                   color: "#000",
                   fontWeight: 800,
-                  fontSize: "1.1rem",
+                  fontSize: "1.3rem",
                 }}
               >
-                $
+                💸
               </div>
               <span
                 style={{
@@ -219,7 +221,7 @@ function AppContent() {
           >
             <button
               onClick={() => {
-                if (page === "send-confirm" || page === "withdraw" || page === "about" || page === "terms") navigate("");
+                if (page === "send-confirm" || page === "withdraw" || page === "premium" || page === "about" || page === "terms") navigate("");
                 else navigate("#payment-methods");
               }}
               style={{
@@ -236,7 +238,7 @@ function AppContent() {
               ← Back
             </button>
             <span style={{ fontSize: "1.1rem", fontWeight: 600, color: "#fff" }}>
-              {page === "add-card" ? "Add Card" : page === "add-bank" ? "Add Bank" : page === "withdraw" ? "Withdraw" : page === "about" ? "About" : page === "terms" ? "Terms & Conditions" : "Confirmation"}
+              {page === "add-card" ? "Add Card" : page === "add-bank" ? "Add Bank" : page === "withdraw" ? "Withdraw" : page === "premium" ? "Premium" : page === "about" ? "About" : page === "terms" ? "Terms & Conditions" : "Confirmation"}
             </span>
           </header>
         )}
@@ -265,6 +267,8 @@ function AppContent() {
             <History />
           ) : page === "withdraw" ? (
             <Withdraw onBalanceChange={refreshBalance} />
+          ) : page === "premium" ? (
+            <Premium />
           ) : page === "about" ? (
             <About />
           ) : page === "terms" ? (

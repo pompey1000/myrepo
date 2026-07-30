@@ -70,7 +70,7 @@ export function authMiddleware(req, res, next) {
 
   // Look up the user to make sure they still exist
   const user = db
-    .query("SELECT id, email, username, account_type, created_at FROM users WHERE id = ?")
+    .query("SELECT id, email, username, account_type, membership, created_at FROM users WHERE id = ?")
     .get(payload.userId);
 
   if (!user) {

@@ -41,10 +41,29 @@ export default function Home({ onBalanceChange }) {
     >
       {/* Greeting */}
       <div style={{ width: "100%", paddingTop: "0.5rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
           <p style={{ color: "#888", fontSize: "0.9rem", marginBottom: 0 }}>
             Good {getGreeting()}, {user.username}
           </p>
+          {user.membership === "premium" && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.2rem",
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                color: "#00D632",
+                background: "rgba(0,214,50,0.1)",
+                border: "1px solid rgba(0,214,50,0.25)",
+                borderRadius: "6px",
+                padding: "0.15rem 0.45rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              ⭐ PREMIUM
+            </span>
+          )}
           {user.accountType === "business" && (
             <span
               style={{
@@ -64,7 +83,26 @@ export default function Home({ onBalanceChange }) {
               🏢 BUSINESS
             </span>
           )}
-          {user.accountType !== "business" && (
+          {user.accountType !== "business" && user.membership !== "premium" && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.2rem",
+                fontSize: "0.7rem",
+                fontWeight: 700,
+                color: "#888",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderRadius: "6px",
+                padding: "0.15rem 0.45rem",
+                whiteSpace: "nowrap",
+              }}
+            >
+              👤 PERSONAL
+            </span>
+          )}
+          {user.accountType === "business" && user.membership === "premium" && (
             <span
               style={{
                 display: "inline-flex",
@@ -244,6 +282,45 @@ export default function Home({ onBalanceChange }) {
           onClick={() => navigate("#payment-methods")}
         />
       </div>
+
+      {/* Premium upsell for free users */}
+      {user.membership !== "premium" && (
+        <button
+          onClick={() => navigate("#premium")}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            padding: "0.85rem 1.25rem",
+            borderRadius: "16px",
+            border: "1px solid rgba(0,214,50,0.2)",
+            background: "linear-gradient(135deg, rgba(0,214,50,0.06), rgba(0,230,118,0.03))",
+            cursor: "pointer",
+            textAlign: "left",
+            transition: "all 0.2s ease",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(0,214,50,0.1)";
+            e.currentTarget.style.borderColor = "rgba(0,214,50,0.35)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "linear-gradient(135deg, rgba(0,214,50,0.06), rgba(0,230,118,0.03))";
+            e.currentTarget.style.borderColor = "rgba(0,214,50,0.2)";
+          }}
+        >
+          <span style={{ fontSize: "1.5rem", flexShrink: 0 }}>✨</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#fff" }}>
+              Upgrade to Premium
+            </div>
+            <div style={{ fontSize: "0.78rem", color: "#888", marginTop: "2px" }}>
+              No fees on any withdrawals
+            </div>
+          </div>
+          <span style={{ color: "#00D632", fontSize: "1.2rem", flexShrink: 0 }}>→</span>
+        </button>
+      )}
 
       {/* About link */}
       <div

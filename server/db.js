@@ -39,6 +39,13 @@ try {
   // Column already exists — that's fine
 }
 
+// Add membership to existing users table if missing (safe — ignores if exists)
+try {
+  db.run("ALTER TABLE users ADD COLUMN membership TEXT DEFAULT 'free' CHECK (membership IN ('free', 'premium'))");
+} catch (_) {
+  // Column already exists — that's fine
+}
+
 // Migration: allow recipient_id to be NULL for withdrawals
 try {
   db.exec(`

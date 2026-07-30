@@ -1,11 +1,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { apiGet, apiPost } from "../api.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 function formatCents(cents) {
-  return `$${(cents / 100).toFixed(2)}`;
+  return `${(cents / 100).toFixed(2)}`;
 }
 
 export default function Withdraw({ onBalanceChange }) {
+  const { user } = useAuth();
+  const isPremium = user?.membership === "premium";
+  const accountType = user?.accountType || "personal";
   const [balanceCents, setBalanceCents] = useState(null);
   const [balanceError, setBalanceError] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -39,11 +43,26 @@ export default function Withdraw({ onBalanceChange }) {
 
   const feeCents = useMemo(() => {
     if (!selectedMethod || amountCents <= 0) return 0;
+    // Premium members pay no fees
+    if (isPremium) return 0;
     if (selectedMethod.type === "card") {
-      return Math.ceil(amountCents * 0.02);
+      if (accountType === "business") {
+        return Math.ceil(amountCents * 5 / 100);
+      }
+      return Math.ceil(amountCents * 35 / 1000);
+    }
+    // Bank is always free
+    return 0;
+  }, [amountCents, selectedMethod, isPremium, accountType]);
+
+  const feePercent = useMemo(() => {
+    if (!selectedMethod || amountCents <= 0) return 0;
+    if (isPremium) return 0;
+    if (selectedMethod.type === "card") {
+      return accountType === "business" ? 5 : 3.5;
     }
     return 0;
-  }, [amountCents, selectedMethod]);
+  }, [selectedMethod, amountCents, isPremium, accountType]);
 
   const netCents = amountCents - feeCents;
 
@@ -147,7 +166,7 @@ export default function Withdraw({ onBalanceChange }) {
           </div>
           {success.feeCents > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ color: "#888", fontSize: "0.9rem" }}>Fee (2% card)</span>
+              <span style={{ color: "#888", fontSize: "0.9rem" }}>Fee ({success.feePercent}% card)</span>
               <span style={{ color: "#ff9800", fontWeight: 600 }}>−{formatCents(success.feeCents)}</span>
             </div>
           )}
@@ -389,13 +408,13 @@ export default function Withdraw({ onBalanceChange }) {
                       borderRadius: "20px",
                       fontSize: "0.7rem",
                       fontWeight: 700,
-                      background: isCard ? "rgba(255, 152, 0, 0.15)" : "rgba(0, 214, 50, 0.12)",
-                      color: isCard ? "#ff9800" : "#00D632",
+                      background: (isCard && !isPremium) ? "rgba(255, 152, 0, 0.15)" : "rgba(0, 214, 50, 0.12)",
+                      color: (isCard && !isPremium) ? "#ff9800" : "#00D632",
                       flexShrink: 0,
                       letterSpacing: "0.02em",
                     }}
                   >
-                    {isCard ? "2% fee" : "Free"}
+                    {isPremium ? "Free" : isCard ? `${accountType === "business" ? "5%" : "3.5%"} fee` : "Free"}
                   </div>
 
                   {/* Selected indicator */}
@@ -442,7 +461,7 @@ export default function Withdraw({ onBalanceChange }) {
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ color: "#888", fontSize: "0.9rem" }}>
-              Fee {selectedMethod.type === "card" ? "(2% card)" : ""}
+              Fee {selectedMethod.type === "card" && !isPremium ? `(${feePercent}% card)` : ""}
             </span>
             <span style={{ color: feeCents > 0 ? "#ff9800" : "#00D632", fontWeight: 600 }}>
               {feeCents > 0 ? `−${formatCents(feeCents)}` : "$0.00"}
@@ -455,6 +474,54 @@ export default function Withdraw({ onBalanceChange }) {
               {formatCents(netCents)}
             </span>
           </div>
+
+          {/* Premium upsell for free users */}
+          {!isPremium && selectedMethod.type === "card" && (
+            <div
+              style={{
+                marginTop: "0.25rem",
+                padding: "0.6rem 0.75rem",
+                borderRadius: "10px",
+                background: "rgba(0,214,50,0.04)",
+                border: "1px solid rgba(0,214,50,0.1)",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                cursor: "pointer",
+              }}
+              onClick={() => {
+                window.location.hash = "#premium";
+                window.dispatchEvent(new Event("hashchange"));
+              }}
+            >
+              <span style={{ fontSize: "1rem", flexShrink: 0 }}>💎</span>
+              <span style={{ fontSize: "0.78rem", color: "#888", flex: 1 }}>
+                Premium members pay <strong style={{ color: "#00D632" }}>no fees</strong> on any withdrawals
+              </span>
+              <span style={{ color: "#00D632", fontSize: "0.8rem", flexShrink: 0 }}>→</span>
+            </div>
+          )}
+
+          {/* Premium member note */}
+          {isPremium && (
+            <div
+              style={{
+                marginTop: "0.25rem",
+                padding: "0.6rem 0.75rem",
+                borderRadius: "10px",
+                background: "rgba(0,214,50,0.04)",
+                border: "1px solid rgba(0,214,50,0.1)",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <span style={{ fontSize: "1rem", flexShrink: 0 }}>✨</span>
+              <span style={{ fontSize: "0.78rem", color: "#00D632", fontWeight: 600 }}>
+                No fees — Premium member
+              </span>
+            </div>
+          )}
         </div>
       )}
 
