@@ -748,6 +748,7 @@ app.post("/api/membership/upgrade", authMiddleware, async (req, res) => {
           product_data: {
             name: "QuickSplit Premium",
             description: "Premium membership — no fees on withdrawals. $4.99/month.",
+            tax_code: "txcd_10000000",
           },
           unit_amount: 499,
           tax_behavior: "inclusive",
