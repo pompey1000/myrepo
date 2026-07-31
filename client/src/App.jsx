@@ -491,7 +491,7 @@ function PremiumSuccess() {
           You're a Premium Member!
         </h1>
         <p style={{ fontSize: "0.9rem", color: "#888", margin: "8px 0 0" }}>
-          Your premium membership has been activated. Enjoy advanced features!
+          Your premium membership has been activated. You now have 0% fees on all withdrawals!
         </p>
       </div>
       <button
