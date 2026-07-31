@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import { apiGet, apiPost } from "../api.js";
+import { apiGet, apiPost, createSplitPayment } from "../api.js";
 
 function formatCents(cents) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -125,7 +125,6 @@ export default function SendMoney({ onBalanceChange }) {
   const canSend =
     recipients.length > 0 &&
     recipients.every((r) => r.selectedUser && r.amountCents > 0) &&
-    selectedMethodId &&
     !sending;
 
   const handleSend = async () => {
@@ -137,14 +136,15 @@ export default function SendMoney({ onBalanceChange }) {
         email: r.selectedUser.email,
         amountCents: r.amountCents,
       })),
-      paymentMethodId: Number(selectedMethodId),
+      paymentMethodId: selectedMethodId ? Number(selectedMethodId) : 0,
     };
 
     try {
-      const data = await apiPost("/payments/split", payload);
+      const data = await createSplitPayment(payload.recipients, payload.paymentMethodId);
       const state = {
         payment: data.payment,
-        newBalanceCents: data.newBalanceCents,
+        newBalanceCents: data.newBalanceCents || null,
+        mode: data.mode || "live",
       };
       sessionStorage.setItem("sendConfirm", JSON.stringify(state));
       onBalanceChange?.(data.newBalanceCents);
@@ -183,7 +183,9 @@ export default function SendMoney({ onBalanceChange }) {
           }}
         >
           <div style={{ fontSize: "2.5rem" }}>💳</div>
-          <p style={{ color: "#888", fontSize: "0.95rem" }}>You need a payment method to send money.</p>
+          <p style={{ color: "#888", fontSize: "0.95rem" }}>
+            Add a payment method to enable splits with real Stripe payment links.
+          </p>
           <button
             onClick={() => {
               window.location.hash = "#add-card";
@@ -358,7 +360,7 @@ export default function SendMoney({ onBalanceChange }) {
             transition: "all 0.2s ease",
           }}
         >
-          {sending ? "Sending..." : `Send ${formatCents(totalCents)}`}
+          {sending ? "Creating..." : `Create Split — ${formatCents(totalCents)}`}
         </button>
       </div>
     </div>

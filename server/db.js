@@ -112,4 +112,25 @@ db.exec(`
   );
 `);
 
+// Add Stripe-related columns to split_payment_recipients (idempotent)
+try {
+  db.run("ALTER TABLE split_payment_recipients ADD COLUMN payment_link_url TEXT");
+} catch (_) { /* already exists */ }
+try {
+  db.run("ALTER TABLE split_payment_recipients ADD COLUMN stripe_session_id TEXT");
+} catch (_) { /* already exists */ }
+try {
+  db.run("ALTER TABLE split_payment_recipients ADD COLUMN payment_status TEXT DEFAULT 'pending'");
+} catch (_) { /* already exists */ }
+
+// Add premium membership column to users (idempotent)
+try {
+  db.run("ALTER TABLE users ADD COLUMN is_premium INTEGER DEFAULT 0");
+} catch (_) { /* already exists */ }
+
+// Add stripe_customer_id to users
+try {
+  db.run("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT");
+} catch (_) { /* already exists */ }
+
 export default db;

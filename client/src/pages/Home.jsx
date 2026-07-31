@@ -371,7 +371,7 @@ export default function Home({ onBalanceChange }) {
                 QuickSplit Premium
               </div>
               <div style={{ fontSize: "0.75rem", color: "#888" }}>
-                Get advanced features for $4.99
+                Get advanced features for $4.99/month
               </div>
             </div>
           </div>

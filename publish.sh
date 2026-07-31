@@ -16,7 +16,8 @@ mkdir -p .run
 # once node_modules is current.
 bun install
 bun run build
-export STRIPE_PUBLISHABLE_KEY="pk_live_51Tz0wYDF7uYdrpFOivW1Asb1k9b4fhjy8d227lCHcLce8TysHiZvaceVdqVwdh6PpFSkeY9JfUVfEqZC5iOtzmA300VRPLgoxI"
+# Read Stripe keys from .env (not committed — keep them out of git)
+set -a; source .env; set +a
 setsid nohup bun run start > .run/server.log 2>&1 < /dev/null &
 
 # Wait for the new server to actually answer before reporting success, so a

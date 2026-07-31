@@ -740,13 +740,14 @@ app.post("/api/membership/upgrade", authMiddleware, async (req, res) => {
 
     // Use inline price_data to avoid Managed Payments tax code issues
     const session = await stripe.checkout.sessions.create({
-      mode: "payment",
+      mode: "subscription",
       line_items: [{
         price_data: {
           currency: "usd",
+          recurring: { interval: "month" },
           product_data: {
             name: "QuickSplit Premium",
-            description: "Premium membership — no fees on withdrawals.",
+            description: "Premium membership — no fees on withdrawals. $4.99/month.",
           },
           unit_amount: 499,
           tax_behavior: "inclusive",

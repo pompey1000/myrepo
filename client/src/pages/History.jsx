@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { apiGet } from "../api.js";
+import { apiGet, listSplits } from "../api.js";
 
 function formatCents(cents) {
   return `$${(cents / 100).toFixed(2)}`;
@@ -50,6 +50,20 @@ function formatDateShort(dateStr) {
   });
 }
 
+function formatCompactDate(dateStr) {
+  const date = new Date(dateStr + "Z");
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return formatDateLabel(dateStr);
+}
+
 function groupByDate(transactions) {
   const groups = {};
   for (const tx of transactions) {
@@ -64,13 +78,18 @@ export default function History() {
   const [transactions, setTransactions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [splits, setSplits] = useState([]);
 
   function fetchTransactions() {
     setLoading(true);
     setError(null);
-    apiGet("/transactions")
-      .then((data) => {
-        setTransactions(data.transactions);
+    Promise.all([
+      apiGet("/transactions"),
+      listSplits().catch(() => ({ payments: [] })),
+    ])
+      .then(([txData, splitData]) => {
+        setTransactions(txData.transactions);
+        setSplits(splitData.payments || []);
         setLoading(false);
       })
       .catch((err) => {
@@ -134,7 +153,10 @@ export default function History() {
     );
   }
 
-  if (!transactions || transactions.length === 0) {
+  const hasTransactions = transactions && transactions.length > 0;
+  const hasSplits = splits && splits.length > 0;
+
+  if (!hasTransactions && !hasSplits) {
     return (
       <div
         style={{
@@ -164,13 +186,13 @@ export default function History() {
         </div>
         <div style={{ fontSize: "1.1rem", color: "#888", fontWeight: 500 }}>No transactions yet</div>
         <div style={{ fontSize: "0.85rem", color: "#555", textAlign: "center" }}>
-          When you send or receive money, it will show up here.
+          When you send, receive, or split money, it will show up here.
         </div>
       </div>
     );
   }
 
-  const grouped = groupByDate(transactions);
+  const grouped = groupByDate(transactions || []);
   const groupOrder = Object.keys(grouped);
 
   return (
@@ -194,7 +216,7 @@ export default function History() {
         <div>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff", margin: 0 }}>Activity</h1>
           <p style={{ fontSize: "0.8rem", color: "#666", margin: "2px 0 0" }}>
-            {transactions.length} transaction{transactions.length !== 1 ? "s" : ""}
+            {(transactions?.length || 0) + (splits?.length || 0)} item{((transactions?.length || 0) + (splits?.length || 0)) !== 1 ? "s" : ""}
           </p>
         </div>
         <button
@@ -218,6 +240,130 @@ export default function History() {
         </button>
       </div>
 
+      {/* Active Splits */}
+      {hasSplits && (
+        <div style={{ marginBottom: "1rem" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              marginBottom: "0.5rem",
+              padding: "0 0.25rem",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "0.75rem",
+                color: "#555",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.04em",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Payment Requests
+            </span>
+            <div style={{ flex: 1, height: "1px", background: "#1a1a1a" }} />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            {splits.map((split) => {
+              const paidCount = split.recipients?.filter((r) => r.payment_status === "paid").length || 0;
+              const totalCount = split.recipients?.length || 0;
+              const allPaid = paidCount === totalCount;
+
+              return (
+                <div
+                  key={split.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    padding: "0.75rem",
+                    borderRadius: "14px",
+                    background: "#141414",
+                    border: "1px solid #1a1a1a",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => {
+                    sessionStorage.setItem(
+                      "sendConfirm",
+                      JSON.stringify({ payment: split, mode: "live" })
+                    );
+                    window.location.hash = "#send-confirm";
+                    window.dispatchEvent(new Event("hashchange"));
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "44px",
+                      height: "44px",
+                      borderRadius: "50%",
+                      background: allPaid
+                        ? "linear-gradient(135deg, #00D632, #00e676)"
+                        : "linear-gradient(135deg, #ff9800, #ffb74d)",
+                      color: "#000",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 700,
+                      fontSize: "1.2rem",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {allPaid ? "✓" : paidCount}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: "0.95rem",
+                        color: "#fff",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {totalCount} recipient{totalCount !== 1 ? "s" : ""}
+                    </div>
+                    <div style={{ fontSize: "0.7rem", color: "#555", marginTop: "1px" }}>
+                      {allPaid
+                        ? "All paid"
+                        : `${paidCount} of ${totalCount} paid`}{" "}
+                      · {formatCompactDate(split.created_at)}
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div
+                      style={{
+                        fontSize: "1rem",
+                        fontWeight: 700,
+                        color: "#00D632",
+                      }}
+                    >
+                      {formatCents(split.total_amount_cents)}
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "0.65rem",
+                        fontWeight: 700,
+                        padding: "0.1rem 0.4rem",
+                        borderRadius: "8px",
+                        background: allPaid ? "rgba(0,214,50,0.15)" : "rgba(255,152,0,0.15)",
+                        color: allPaid ? "#00D632" : "#ff9800",
+                      }}
+                    >
+                      {allPaid ? "COMPLETED" : "PENDING"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Transaction groups */}
       {groupOrder.map((dateLabel) => (
         <div key={dateLabel} style={{ marginBottom: "1rem" }}>
           {/* Date divider */}

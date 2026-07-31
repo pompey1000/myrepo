@@ -71,3 +71,27 @@ export async function getMe() {
 export function clearToken() {
   localStorage.removeItem("quicksplit_token");
 }
+
+// ── Split payment helpers ──────────────────────────────────────────────────
+
+export async function createSplitPayment(recipients, paymentMethodId) {
+  return apiPost("/payments/split", { recipients, paymentMethodId });
+}
+
+export async function getSplitStatus(splitId) {
+  return apiGet(`/payments/split/${splitId}/status`);
+}
+
+export async function listSplits() {
+  return apiGet("/payments/split");
+}
+
+// ── Membership helpers ────────────────────────────────────────────────────
+
+export async function getMembershipStatus() {
+  return apiGet("/membership/status");
+}
+
+export async function upgradeToPremium() {
+  return apiPost("/membership/upgrade", {});
+}
