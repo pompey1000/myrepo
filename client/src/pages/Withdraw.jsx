@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { apiGet, apiPost } from "../api.js";
+import { useAuth } from "../context/AuthContext.jsx";
+import { apiGet, apiPost, getMembershipStatus } from "../api.js";
 
 function formatCents(cents) {
-  return `$${(cents / 100).toFixed(2)}`;
+  return `${(cents / 100).toFixed(2)}`;
 }
 
 export default function Withdraw({ onBalanceChange }) {
+  const { user } = useAuth();
   const [balanceCents, setBalanceCents] = useState(null);
   const [balanceError, setBalanceError] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState([]);
@@ -16,6 +18,9 @@ export default function Withdraw({ onBalanceChange }) {
   const [withdrawing, setWithdrawing] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [isPremium, setIsPremium] = useState(null);
+
+  const accountType = user?.accountType || "personal";
 
   // Fetch balance
   useEffect(() => {
@@ -37,13 +42,39 @@ export default function Withdraw({ onBalanceChange }) {
       .catch(() => setMethodsLoading(false));
   }, []);
 
+  // Fetch premium status
+  useEffect(() => {
+    getMembershipStatus()
+      .then((data) => setIsPremium(data.isPremium))
+      .catch(() => setIsPremium(false));
+  }, []);
+
   const feeCents = useMemo(() => {
     if (!selectedMethod || amountCents <= 0) return 0;
+    if (isPremium) return 0;
     if (selectedMethod.type === "card") {
-      return Math.ceil(amountCents * 0.02);
+      if (accountType === "business") {
+        return Math.ceil(amountCents * 0.05);
+      }
+      return Math.ceil(amountCents * 0.035);
     }
     return 0;
-  }, [amountCents, selectedMethod]);
+  }, [amountCents, selectedMethod, isPremium, accountType]);
+
+  const feeLabel = useMemo(() => {
+    if (!selectedMethod) return "";
+    if (isPremium) return "✨ No fees — Premium member";
+    if (selectedMethod.type === "bank") return "Free";
+    if (accountType === "business") return "5% card fee (business)";
+    return "3.5% card fee";
+  }, [selectedMethod, isPremium, accountType]);
+
+  const feeRate = useMemo(() => {
+    if (!selectedMethod) return 0;
+    if (isPremium || selectedMethod.type === "bank") return 0;
+    if (accountType === "business") return 0.05;
+    return 0.035;
+  }, [selectedMethod, isPremium, accountType]);
 
   const netCents = amountCents - feeCents;
 
@@ -98,6 +129,7 @@ export default function Withdraw({ onBalanceChange }) {
 
   // Success state
   if (success) {
+    const pmType = success.paymentMethod.type === "card" ? "card" : "bank account";
     return (
       <div
         style={{
@@ -126,8 +158,29 @@ export default function Withdraw({ onBalanceChange }) {
         </div>
 
         <h2 style={{ fontSize: "1.5rem", fontWeight: 700, color: "#fff", textAlign: "center" }}>
-          Withdrawal Successful
+          Payout Request Submitted!
         </h2>
+
+        <p style={{ fontSize: "0.9rem", color: "#888", textAlign: "center", margin: 0, lineHeight: "1.5" }}>
+          You'll receive {formatCents(success.netCents)} to your {pmType} ending in {success.paymentMethod.lastFour} within 1-2 business days.
+        </p>
+
+        {isPremium && (
+          <div
+            style={{
+              padding: "0.6rem 1rem",
+              borderRadius: "12px",
+              background: "rgba(255, 215, 0, 0.08)",
+              border: "1px solid rgba(255, 215, 0, 0.2)",
+              color: "#ffd700",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              textAlign: "center",
+            }}
+          >
+            ✨ No fees — Premium member. Payout within 1-2 business days.
+          </div>
+        )}
 
         <div
           style={{
@@ -142,12 +195,12 @@ export default function Withdraw({ onBalanceChange }) {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ color: "#888", fontSize: "0.9rem" }}>Amount withdrawn</span>
+            <span style={{ color: "#888", fontSize: "0.9rem" }}>Amount requested</span>
             <span style={{ color: "#fff", fontWeight: 600 }}>{formatCents(success.amountCents)}</span>
           </div>
           {success.feeCents > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ color: "#888", fontSize: "0.9rem" }}>Fee (2% card)</span>
+              <span style={{ color: "#888", fontSize: "0.9rem" }}>Fee ({feeLabel})</span>
               <span style={{ color: "#ff9800", fontWeight: 600 }}>−{formatCents(success.feeCents)}</span>
             </div>
           )}
@@ -196,10 +249,46 @@ export default function Withdraw({ onBalanceChange }) {
         gap: "1.25rem",
       }}
     >
+      {/* Manual processing notice */}
+      <div
+        style={{
+          width: "100%",
+          background: "rgba(0, 214, 50, 0.06)",
+          border: "1px solid rgba(0, 214, 50, 0.15)",
+          borderRadius: "12px",
+          padding: "0.85rem 1rem",
+          fontSize: "0.8rem",
+          color: "#aaa",
+          lineHeight: "1.5",
+          textAlign: "left",
+        }}
+      >
+        📋 Payouts are processed manually and sent to your linked debit card or bank account within 1-2 business days.
+      </div>
+
+      {/* Premium member notice */}
+      {isPremium && (
+        <div
+          style={{
+            width: "100%",
+            background: "rgba(255, 215, 0, 0.06)",
+            border: "1px solid rgba(255, 215, 0, 0.15)",
+            borderRadius: "12px",
+            padding: "0.75rem 1rem",
+            fontSize: "0.85rem",
+            color: "#ffd700",
+            fontWeight: 600,
+            textAlign: "center",
+          }}
+        >
+          ✨ No fees — Premium member. Payout within 1-2 business days.
+        </div>
+      )}
+
       {/* Available Balance */}
       <div style={{ width: "100%", textAlign: "center", paddingTop: "0.25rem" }}>
         <div style={{ fontSize: "0.75rem", color: "#666", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.25rem" }}>
-          Available Balance
+          Available Balance (Demo)
         </div>
         {balanceError ? (
           <div style={{ fontSize: "2rem", fontWeight: 700, color: "#ff4444" }}>Error</div>
@@ -224,7 +313,7 @@ export default function Withdraw({ onBalanceChange }) {
             marginBottom: "0.5rem",
           }}
         >
-          Withdraw Amount
+          Payout Amount
         </label>
         <div
           style={{
@@ -389,13 +478,19 @@ export default function Withdraw({ onBalanceChange }) {
                       borderRadius: "20px",
                       fontSize: "0.7rem",
                       fontWeight: 700,
-                      background: isCard ? "rgba(255, 152, 0, 0.15)" : "rgba(0, 214, 50, 0.12)",
-                      color: isCard ? "#ff9800" : "#00D632",
+                      background: (isCard && !isPremium) ? "rgba(255, 152, 0, 0.15)" : "rgba(0, 214, 50, 0.12)",
+                      color: (isCard && !isPremium) ? "#ff9800" : "#00D632",
                       flexShrink: 0,
                       letterSpacing: "0.02em",
                     }}
                   >
-                    {isCard ? "2% fee" : "Free"}
+                    {isPremium
+                      ? "✨ Free"
+                      : isCard
+                      ? accountType === "business"
+                        ? "5% fee"
+                        : "3.5% fee"
+                      : "Free"}
                   </div>
 
                   {/* Selected indicator */}
@@ -437,12 +532,12 @@ export default function Withdraw({ onBalanceChange }) {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ color: "#888", fontSize: "0.9rem" }}>Withdrawal amount</span>
+            <span style={{ color: "#888", fontSize: "0.9rem" }}>Payout amount</span>
             <span style={{ color: "#fff", fontWeight: 600 }}>{formatCents(amountCents)}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ color: "#888", fontSize: "0.9rem" }}>
-              Fee {selectedMethod.type === "card" ? "(2% card)" : ""}
+              Fee {feeLabel ? `(${feeLabel})` : ""}
             </span>
             <span style={{ color: feeCents > 0 ? "#ff9800" : "#00D632", fontWeight: 600 }}>
               {feeCents > 0 ? `−${formatCents(feeCents)}` : "$0.00"}
@@ -477,7 +572,7 @@ export default function Withdraw({ onBalanceChange }) {
         </div>
       )}
 
-      {/* Withdraw Button */}
+      {/* Payout Button */}
       <button
         onClick={handleWithdraw}
         disabled={!canWithdraw}
@@ -499,8 +594,8 @@ export default function Withdraw({ onBalanceChange }) {
         {withdrawing
           ? "Processing..."
           : amountCents > 0
-          ? `Withdraw ${formatCents(amountCents)}`
-          : "Enter an amount to withdraw"}
+          ? `Request ${formatCents(amountCents)}`
+          : "Enter an amount to request"}
       </button>
     </div>
   );

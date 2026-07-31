@@ -55,6 +55,8 @@ function AppContent() {
       else if (hash === "withdraw") setPage("withdraw");
       else if (hash === "about") setPage("about");
       else if (hash === "terms") setPage("terms");
+      else if (hash === "premium-success") setPage("premium-success");
+      else if (hash.startsWith("split-paid")) setPage("split-paid");
       else setPage("home");
       setPageKey((k) => k + 1);
     }
@@ -76,7 +78,7 @@ function AppContent() {
       .catch(() => {});
   }, [user]);
 
-  const isSubPage = page === "add-card" || page === "add-bank" || page === "send-confirm" || page === "withdraw" || page === "about" || page === "terms";
+  const isSubPage = page === "add-card" || page === "add-bank" || page === "send-confirm" || page === "withdraw" || page === "about" || page === "terms" || page === "premium-success" || page === "split-paid";
   const isTabPage = page === "home" || page === "send" || page === "history" || page === "payment-methods";
 
   if (loading) {
@@ -236,7 +238,7 @@ function AppContent() {
               ← Back
             </button>
             <span style={{ fontSize: "1.1rem", fontWeight: 600, color: "#fff" }}>
-              {page === "add-card" ? "Add Card" : page === "add-bank" ? "Add Bank" : page === "withdraw" ? "Withdraw" : page === "about" ? "About" : page === "terms" ? "Terms & Conditions" : "Confirmation"}
+              {page === "add-card" ? "Add Card" : page === "add-bank" ? "Add Bank" : page === "withdraw" ? "Request Payout" : page === "about" ? "About" : page === "terms" ? "Terms & Conditions" : "Confirmation"}
             </span>
           </header>
         )}
@@ -269,6 +271,10 @@ function AppContent() {
             <About />
           ) : page === "terms" ? (
             <Terms />
+          ) : page === "premium-success" ? (
+            <PremiumSuccess />
+          ) : page === "split-paid" ? (
+            <SplitPaidNotice />
           ) : (
             <Home onBalanceChange={setBalanceCents} />
           )}
@@ -450,6 +456,122 @@ function AppContent() {
     );
   }
   return <Login />;
+}
+
+function PremiumSuccess() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "3rem 1.5rem",
+        gap: "1.5rem",
+        textAlign: "center",
+      }}
+    >
+      <div
+        style={{
+          width: "88px",
+          height: "88px",
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #ffd700, #ffb800)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "2.5rem",
+          color: "#000",
+          boxShadow: "0 8px 32px rgba(255,215,0,0.3)",
+        }}
+      >
+        ⭐
+      </div>
+      <div>
+        <h1 style={{ fontSize: "1.8rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+          You're a Premium Member!
+        </h1>
+        <p style={{ fontSize: "0.9rem", color: "#888", margin: "8px 0 0" }}>
+          Your premium membership has been activated. Enjoy advanced features!
+        </p>
+      </div>
+      <button
+        onClick={() => {
+          window.location.hash = "";
+          window.dispatchEvent(new Event("hashchange"));
+        }}
+        style={{
+          padding: "0.85rem 2rem",
+          borderRadius: "50px",
+          border: "none",
+          background: "#ffd700",
+          color: "#000",
+          fontWeight: 700,
+          fontSize: "0.95rem",
+          cursor: "pointer",
+        }}
+      >
+        Go to Home
+      </button>
+    </div>
+  );
+}
+
+function SplitPaidNotice() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        padding: "3rem 1.5rem",
+        gap: "1.5rem",
+        textAlign: "center",
+      }}
+    >
+      <div
+        style={{
+          width: "88px",
+          height: "88px",
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #00D632, #00e676)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "2.8rem",
+          color: "#000",
+          boxShadow: "0 8px 32px rgba(0,214,50,0.3)",
+        }}
+      >
+        ✓
+      </div>
+      <div>
+        <h1 style={{ fontSize: "1.8rem", fontWeight: 800, color: "#fff", margin: 0 }}>
+          Payment Successful!
+        </h1>
+        <p style={{ fontSize: "0.9rem", color: "#888", margin: "8px 0 0" }}>
+          Thank you for your payment. The split creator will be notified.
+        </p>
+      </div>
+      <button
+        onClick={() => {
+          window.location.hash = "";
+          window.dispatchEvent(new Event("hashchange"));
+        }}
+        style={{
+          padding: "0.85rem 2rem",
+          borderRadius: "50px",
+          border: "none",
+          background: "#00D632",
+          color: "#000",
+          fontWeight: 700,
+          fontSize: "0.95rem",
+          cursor: "pointer",
+        }}
+      >
+        Back to Home
+      </button>
+    </div>
+  );
 }
 
 export default function App() {

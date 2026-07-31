@@ -1,17 +1,24 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import { apiGet } from "../api.js";
+import { apiGet, listSplits, getMembershipStatus, upgradeToPremium } from "../api.js";
 
 function formatCents(cents) {
   const dollars = (cents / 100).toFixed(2);
   const [whole, decimal] = dollars.split(".");
-  return { whole: `$${whole}`, decimal };
+  return { whole: "$" + whole, decimal };
+}
+
+function formatCompactCents(cents) {
+  return "$" + (cents / 100).toFixed(2);
 }
 
 export default function Home({ onBalanceChange }) {
   const { user } = useAuth();
   const [balanceCents, setBalanceCents] = useState(null);
   const [balanceError, setBalanceError] = useState(false);
+  const [splits, setSplits] = useState([]);
+  const [isPremium, setIsPremium] = useState(null);
+  const [upgrading, setUpgrading] = useState(false);
 
   useEffect(() => {
     apiGet("/users/me/balance")
@@ -20,6 +27,18 @@ export default function Home({ onBalanceChange }) {
         onBalanceChange?.(data.balanceCents);
       })
       .catch(() => setBalanceError(true));
+  }, []);
+
+  useEffect(() => {
+    listSplits()
+      .then((data) => setSplits(data.payments || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    getMembershipStatus()
+      .then((data) => setIsPremium(data.isPremium))
+      .catch(() => setIsPremium(false));
   }, []);
 
   function navigate(hash) {
@@ -125,7 +144,7 @@ export default function Home({ onBalanceChange }) {
             position: "relative",
           }}
         >
-          Available Balance
+          Available Balance (Demo)
         </div>
 
         {balanceError ? (
@@ -148,6 +167,19 @@ export default function Home({ onBalanceChange }) {
             <span style={{ fontSize: "1.6rem", opacity: 0.7 }}>.{balance.decimal}</span>
           </div>
         )}
+
+        {/* Fine print */}
+        <div
+          style={{
+            fontSize: "0.65rem",
+            color: "#555",
+            marginTop: "0.6rem",
+            position: "relative",
+            lineHeight: "1.4",
+          }}
+        >
+          Real payments collected via Stripe. Payouts processed within 1-2 business days.
+        </div>
       </div>
 
       {/* Action Buttons */}
@@ -194,7 +226,7 @@ export default function Home({ onBalanceChange }) {
 
         <ActionButton
           icon="🏦"
-          label="Withdraw"
+          label="Payout"
           onClick={() => navigate("#withdraw")}
         />
         <ActionButton
@@ -244,6 +276,157 @@ export default function Home({ onBalanceChange }) {
           onClick={() => navigate("#payment-methods")}
         />
       </div>
+
+      {/* Track My Splits */}
+      {splits.length > 0 && (
+        <div
+          style={{
+            width: "100%",
+            padding: "0.5rem 0.25rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.5rem",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "0.75rem",
+              color: "#555",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              marginBottom: "0.25rem",
+            }}
+          >
+            Track My Splits
+          </div>
+
+          {splits.slice(0, 3).map((split) => {
+            const paidCount = split.recipients?.filter((r) => r.payment_status === "paid").length || 0;
+            const totalCount = split.recipients?.length || 0;
+            const allPaid = paidCount === totalCount;
+
+            return (
+              <button
+                key={split.id}
+                onClick={() => {
+                  sessionStorage.setItem(
+                    "sendConfirm",
+                    JSON.stringify({ payment: split, mode: "live" })
+                  );
+                  navigate("#send-confirm");
+                }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "0.75rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "12px",
+                  border: "1px solid #1e1e1e",
+                  background: "#141414",
+                  color: "#fff",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  width: "100%",
+                  transition: "background 0.2s ease",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#1a1a1a"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#141414"; }}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+                  <span style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                    {formatCompactCents(split.total_amount_cents)} split
+                  </span>
+                  <span style={{ fontSize: "0.7rem", color: allPaid ? "#00D632" : "#ff9800" }}>
+                    {allPaid ? "✓ All paid" : `${paidCount}/${totalCount} paid`}
+                  </span>
+                </div>
+                <span style={{ color: "#666", fontSize: "0.85rem" }}>
+                  {allPaid ? "✓" : "⏳"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Premium Upgrade */}
+      {isPremium === false && (
+        <div
+          style={{
+            width: "100%",
+            background: "linear-gradient(145deg, #1a1a0f 0%, #1a1a1a 100%)",
+            borderRadius: "16px",
+            border: "1px solid #2e2e1e",
+            padding: "1.25rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "1.5rem" }}>⭐</span>
+            <div>
+              <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "#ffd700" }}>
+                QuickSplit Premium
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "#888" }}>
+                Get advanced features for $4.99
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              setUpgrading(true);
+              try {
+                const result = await upgradeToPremium();
+                window.open(result.checkoutUrl, "_blank");
+              } catch (err) {
+                alert("Premium upgrade is not available right now. Please try again later.");
+              } finally {
+                setUpgrading(false);
+              }
+            }}
+            disabled={upgrading}
+            style={{
+              width: "100%",
+              padding: "0.75rem",
+              borderRadius: "12px",
+              border: "none",
+              background: "linear-gradient(135deg, #ffd700, #ffb800)",
+              color: "#000",
+              fontWeight: 700,
+              fontSize: "0.9rem",
+              cursor: upgrading ? "not-allowed" : "pointer",
+              opacity: upgrading ? 0.6 : 1,
+            }}
+          >
+            {upgrading ? "Processing..." : "Upgrade to Premium — $4.99"}
+          </button>
+        </div>
+      )}
+
+      {isPremium === true && (
+        <div
+          style={{
+            width: "100%",
+            padding: "0.5rem 0.25rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+          }}
+        >
+          <span style={{ fontSize: "1.2rem" }}>⭐</span>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "#ffd700" }}>
+              Premium Member
+            </span>
+            <span style={{ fontSize: "0.7rem", color: "#666" }}>
+              You have full access to all features
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* About link */}
       <div

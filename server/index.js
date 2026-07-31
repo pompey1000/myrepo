@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
+import Stripe from "stripe";
 import db from "./db.js";
 import { signToken, authMiddleware } from "./auth.js";
 
@@ -11,6 +12,16 @@ const app = express();
 const PORT = 3000;
 
 const STRIPE_KEY = process.env.STRIPE_PUBLISHABLE_KEY || "";
+const STRIPE_SECRET = process.env.STRIPE_SECRET_KEY || "";
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
+
+let stripe = null;
+if (STRIPE_SECRET) {
+  stripe = new Stripe(STRIPE_SECRET);
+}
+
+// ── Raw body middleware for Stripe webhook (must come before express.json) ──
+app.use("/api/stripe/webhook", express.raw({ type: "application/json" }));
 
 app.use(express.json());
 
@@ -258,9 +269,9 @@ app.post("/api/withdraw", authMiddleware, (req, res) => {
       return res.status(400).json({ error: "Payment method must be 'card' or 'bank'" });
     }
 
-    // Check user balance
+    // Check user balance and account details
     const user = db
-      .query("SELECT balance_cents FROM users WHERE id = ?")
+      .query("SELECT balance_cents, account_type, is_premium FROM users WHERE id = ?")
       .get(req.user.id);
 
     if (!user) {
@@ -274,8 +285,16 @@ app.post("/api/withdraw", authMiddleware, (req, res) => {
     // Fee calculation
     let feeCents = 0;
     if (paymentMethod.type === "card") {
-      feeCents = Math.ceil(amountCents * 0.02);
+      if (!user.is_premium) {
+        if (user.account_type === "business") {
+          feeCents = Math.ceil(amountCents * 0.05);   // 5% for business accounts
+        } else {
+          feeCents = Math.ceil(amountCents * 0.035);  // 3.5% for personal accounts
+        }
+      }
+      // Premium users: no fee
     }
+    // Bank: always free
     const netCents = amountCents - feeCents;
 
     // Atomic transaction
@@ -375,8 +394,55 @@ app.get("/api/transactions", authMiddleware, (req, res) => {
 
 // ── Split payment routes ─────────────────────────────────────────────────────
 
-// POST /api/payments/split — Create a split payment
-app.post("/api/payments/split", authMiddleware, (req, res) => {
+// Helper: Simulate split (fallback when no Stripe key)
+function simulateSplitPayment(req, res, resolvedRecipients, totalAmountCents) {
+  db.run("BEGIN TRANSACTION");
+  try {
+    const splitResult = db.run(
+      "INSERT INTO split_payments (sender_id, total_amount_cents, status) VALUES (?, ?, 'completed')",
+      [req.user.id, totalAmountCents]
+    );
+    const splitPaymentId = splitResult.lastInsertRowid;
+
+    for (const r of resolvedRecipients) {
+      db.run("UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?", [
+        r.amountCents,
+        r.userId,
+      ]);
+      db.run(
+        "INSERT INTO split_payment_recipients (split_payment_id, recipient_id, amount_cents, payment_status) VALUES (?, ?, ?, 'paid')",
+        [splitPaymentId, r.userId, r.amountCents]
+      );
+    }
+
+    db.run("COMMIT");
+
+    const splitPayment = db
+      .query("SELECT id, sender_id, total_amount_cents, status, created_at FROM split_payments WHERE id = ?")
+      .get(splitPaymentId);
+
+    const recipientRows = db
+      .query(
+        `SELECT spr.id, spr.recipient_id, spr.amount_cents, spr.payment_link_url, spr.payment_status,
+                u.email, u.username
+         FROM split_payment_recipients spr
+         JOIN users u ON u.id = spr.recipient_id
+         WHERE spr.split_payment_id = ?`
+      )
+      .all(splitPaymentId);
+
+    res.status(201).json({
+      payment: { ...splitPayment, recipients: recipientRows },
+      mode: "simulated",
+    });
+  } catch (innerErr) {
+    db.run("ROLLBACK");
+    throw innerErr;
+  }
+}
+
+// POST /api/payments/split — Create a split payment with real Stripe Payment Links
+app.post("/api/payments/split", authMiddleware, async (req, res) => {
   try {
     const { recipients, paymentMethodId } = req.body;
 
@@ -394,19 +460,6 @@ app.post("/api/payments/split", authMiddleware, (req, res) => {
       }
     }
 
-    if (!paymentMethodId || typeof paymentMethodId !== "number") {
-      return res.status(400).json({ error: "A valid paymentMethodId is required" });
-    }
-
-    // Verify payment method belongs to sender
-    const paymentMethod = db
-      .query("SELECT id FROM payment_methods WHERE id = ? AND user_id = ?")
-      .get(paymentMethodId, req.user.id);
-
-    if (!paymentMethod) {
-      return res.status(400).json({ error: "Payment method not found or does not belong to you" });
-    }
-
     // Resolve recipients and validate
     const resolvedRecipients = [];
     const seenIds = new Set();
@@ -421,7 +474,7 @@ app.post("/api/payments/split", authMiddleware, (req, res) => {
       }
 
       if (user.id === req.user.id) {
-        return res.status(400).json({ error: "You cannot send money to yourself" });
+        return res.status(400).json({ error: "You cannot request money from yourself" });
       }
 
       if (seenIds.has(user.id)) {
@@ -437,90 +490,84 @@ app.post("/api/payments/split", authMiddleware, (req, res) => {
       });
     }
 
-    // Calculate total
     const totalAmountCents = resolvedRecipients.reduce((sum, r) => sum + r.amountCents, 0);
 
-    // Begin transaction
-    db.run("BEGIN TRANSACTION");
+    // If no Stripe key, fall back to simulated flow
+    if (!stripe) {
+      return simulateSplitPayment(req, res, resolvedRecipients, totalAmountCents);
+    }
 
+    // Try real Stripe Payment Links — fall back to simulated on any Stripe error
     try {
-      // Check sender balance (lock the row)
-      const sender = db
-        .query("SELECT balance_cents FROM users WHERE id = ?")
-        .get(req.user.id);
-
-      if (!sender || sender.balance_cents < totalAmountCents) {
-        db.run("ROLLBACK");
-        return res.status(400).json({ error: "Insufficient balance" });
-      }
-
-      // Deduct from sender
-      db.run("UPDATE users SET balance_cents = balance_cents - ? WHERE id = ?", [
-        totalAmountCents,
-        req.user.id,
-      ]);
-
-      // Create split_payments record
+      db.run("BEGIN TRANSACTION");
       const splitResult = db.run(
-        "INSERT INTO split_payments (sender_id, total_amount_cents, status) VALUES (?, ?, 'completed')",
+        "INSERT INTO split_payments (sender_id, total_amount_cents, status) VALUES (?, ?, 'pending')",
         [req.user.id, totalAmountCents]
       );
       const splitPaymentId = splitResult.lastInsertRowid;
 
-      // Create split_payment_recipients and transactions for each recipient
+      const recipientRows = [];
+
       for (const r of resolvedRecipients) {
-        // Add to recipient's balance
-        db.run("UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?", [
-          r.amountCents,
-          r.userId,
-        ]);
+        // Create Stripe Payment Link with inline price_data
+        const paymentLink = await stripe.paymentLinks.create({
+          line_items: [{
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: `QuickSplit — ${r.username || r.email}`,
+              },
+              unit_amount: r.amountCents,
+              tax_behavior: "inclusive",
+            },
+            quantity: 1,
+          }],
+          metadata: {
+            split_payment_id: String(splitPaymentId),
+            recipient_email: r.email,
+            type: "split_payment",
+          },
+          after_completion: {
+            type: "redirect",
+            redirect: {
+              url: `https://www.quicksplitnow.com/#split-paid?ref=${splitPaymentId}`,
+            },
+          },
+        });
 
-        // Create split_payment_recipients record
-        db.run(
-          "INSERT INTO split_payment_recipients (split_payment_id, recipient_id, amount_cents) VALUES (?, ?, ?)",
-          [splitPaymentId, r.userId, r.amountCents]
+        // Insert recipient record with payment link info
+        const insertResult = db.run(
+          `INSERT INTO split_payment_recipients 
+           (split_payment_id, recipient_id, amount_cents, payment_link_url, payment_status)
+           VALUES (?, ?, ?, ?, 'pending')`,
+          [splitPaymentId, r.userId, r.amountCents, paymentLink.url]
         );
 
-        // Create individual transaction record
-        db.run(
-          "INSERT INTO transactions (sender_id, recipient_id, amount_cents, status) VALUES (?, ?, ?, 'completed')",
-          [req.user.id, r.userId, r.amountCents]
-        );
+        recipientRows.push({
+          id: insertResult.lastInsertRowid,
+          recipient_id: r.userId,
+          amount_cents: r.amountCents,
+          payment_link_url: paymentLink.url,
+          payment_status: "pending",
+          email: r.email,
+          username: r.username,
+        });
       }
 
       db.run("COMMIT");
 
-      // Fetch the created split payment with recipients
       const splitPayment = db
-        .query(
-          `SELECT id, sender_id, total_amount_cents, status, created_at
-           FROM split_payments WHERE id = ?`
-        )
+        .query("SELECT id, sender_id, total_amount_cents, status, created_at FROM split_payments WHERE id = ?")
         .get(splitPaymentId);
 
-      const recipientRows = db
-        .query(
-          `SELECT spr.id, spr.recipient_id, spr.amount_cents, u.email, u.username
-           FROM split_payment_recipients spr
-           JOIN users u ON u.id = spr.recipient_id
-           WHERE spr.split_payment_id = ?`
-        )
-        .all(splitPaymentId);
-
-      const newBalance = db
-        .query("SELECT balance_cents FROM users WHERE id = ?")
-        .get(req.user.id);
-
       res.status(201).json({
-        payment: {
-          ...splitPayment,
-          recipients: recipientRows,
-        },
-        newBalanceCents: newBalance.balance_cents,
+        payment: { ...splitPayment, status: "pending", recipients: recipientRows },
+        mode: "live",
       });
-    } catch (innerErr) {
+    } catch (stripeErr) {
       db.run("ROLLBACK");
-      throw innerErr;
+      console.error("Stripe split payment failed, falling back to simulated:", stripeErr.message);
+      return simulateSplitPayment(req, res, resolvedRecipients, totalAmountCents);
     }
   } catch (err) {
     console.error("Split payment error:", err);
@@ -540,11 +587,12 @@ app.get("/api/payments/split", authMiddleware, (req, res) => {
       )
       .all(req.user.id);
 
-    // For each payment, fetch recipients
     const paymentsWithRecipients = payments.map((p) => {
       const recipients = db
         .query(
-          `SELECT spr.id, spr.recipient_id, spr.amount_cents, u.email, u.username
+          `SELECT spr.id, spr.recipient_id, spr.amount_cents, 
+                  spr.payment_link_url, spr.payment_status, spr.stripe_session_id,
+                  u.email, u.username
            FROM split_payment_recipients spr
            JOIN users u ON u.id = spr.recipient_id
            WHERE spr.split_payment_id = ?`
@@ -557,6 +605,172 @@ app.get("/api/payments/split", authMiddleware, (req, res) => {
   } catch (err) {
     console.error("List split payments error:", err);
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/payments/split/:id/status — Check payment statuses
+app.get("/api/payments/split/:id/status", authMiddleware, (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const splitPayment = db
+      .query("SELECT id, sender_id, total_amount_cents, status, created_at FROM split_payments WHERE id = ?")
+      .get(id);
+
+    if (!splitPayment) {
+      return res.status(404).json({ error: "Split payment not found" });
+    }
+
+    const recipients = db
+      .query(
+        `SELECT spr.id, spr.recipient_id, spr.amount_cents, 
+                spr.payment_link_url, spr.payment_status, spr.stripe_session_id,
+                u.email, u.username
+         FROM split_payment_recipients spr
+         JOIN users u ON u.id = spr.recipient_id
+         WHERE spr.split_payment_id = ?`
+      )
+      .all(id);
+
+    res.json({
+      payment: { ...splitPayment, recipients },
+    });
+  } catch (err) {
+    console.error("Split status error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Stripe webhook ────────────────────────────────────────────────────────
+
+// POST /api/stripe/webhook — Handle Stripe events
+app.post("/api/stripe/webhook", async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  let event;
+
+  if (!stripe) {
+    return res.status(200).json({ received: false, reason: "stripe not configured" });
+  }
+
+  try {
+    if (STRIPE_WEBHOOK_SECRET && sig) {
+      event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+    } else {
+      // Fallback: parse JSON body directly (dev mode, no signature verification)
+      event = JSON.parse(req.body.toString());
+    }
+  } catch (err) {
+    console.error("Webhook signature verification failed:", err.message);
+    return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+  }
+
+  // Handle checkout.session.completed
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const metadata = session.metadata || {};
+    
+    console.log("Checkout completed:", session.id, metadata);
+
+    if (metadata.type === "split_payment") {
+      // Update the split payment recipient by matching recipient_email
+      db.run(
+        `UPDATE split_payment_recipients 
+         SET payment_status = 'paid', stripe_session_id = ?
+         WHERE payment_status = 'pending'
+           AND split_payment_id = ?
+           AND id IN (
+             SELECT spr.id FROM split_payment_recipients spr 
+             JOIN users u ON u.id = spr.recipient_id 
+             WHERE spr.split_payment_id = ? AND u.email = ?
+             LIMIT 1
+           )`,
+        [session.id, metadata.split_payment_id, metadata.split_payment_id, metadata.recipient_email]
+      );
+
+      // Check if all recipients have paid — if so, mark the split as completed
+      const pendingCount = db
+        .query(
+          "SELECT COUNT(*) as cnt FROM split_payment_recipients WHERE split_payment_id = ? AND payment_status = 'pending'"
+        )
+        .get(metadata.split_payment_id);
+      
+      if (pendingCount && pendingCount.cnt === 0) {
+        db.run("UPDATE split_payments SET status = 'completed' WHERE id = ?", [
+          metadata.split_payment_id,
+        ]);
+      }
+    }
+
+    if (metadata.type === "premium_upgrade") {
+      const userId = metadata.user_id;
+      if (userId) {
+        db.run("UPDATE users SET is_premium = 1 WHERE id = ?", [userId]);
+        console.log(`User ${userId} upgraded to premium via checkout session ${session.id}`);
+      }
+    }
+  }
+
+  res.status(200).json({ received: true });
+});
+
+// ── Membership / Premium routes ─────────────────────────────────────────────
+
+// GET /api/membership/status — Check premium status
+app.get("/api/membership/status", authMiddleware, (req, res) => {
+  try {
+    const user = db
+      .query("SELECT is_premium FROM users WHERE id = ?")
+      .get(req.user.id);
+
+    res.json({
+      isPremium: user ? Boolean(user.is_premium) : false,
+    });
+  } catch (err) {
+    console.error("Membership status error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/membership/upgrade — Create Stripe Checkout for premium
+app.post("/api/membership/upgrade", authMiddleware, async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(400).json({ error: "Stripe is not configured. Premium upgrades are unavailable." });
+    }
+
+    // Use inline price_data to avoid Managed Payments tax code issues
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: "QuickSplit Premium",
+            description: "Premium membership — no fees on withdrawals.",
+          },
+          unit_amount: 499,
+          tax_behavior: "inclusive",
+        },
+        quantity: 1,
+      }],
+      metadata: {
+        type: "premium_upgrade",
+        user_id: String(req.user.id),
+      },
+      success_url: `https://www.quicksplitnow.com/#premium-success`,
+      cancel_url: `https://www.quicksplitnow.com/#premium`,
+    });
+
+    res.json({
+      checkoutUrl: session.url,
+      sessionId: session.id,
+    });
+  } catch (err) {
+    console.error("Premium upgrade error:", err.message);
+    const message = err.type === "StripeInvalidRequestError" 
+      ? `Stripe error: ${err.raw?.message || err.message}`
+      : `Server error: ${err.message}`;
+    res.status(err.type ? 400 : 500).json({ error: message });
   }
 });
 
